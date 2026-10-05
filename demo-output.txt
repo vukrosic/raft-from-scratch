@@ -1,0 +1,118 @@
+## step1_log
+log: ['set x 1', 'add x 4', 'set y 7', 'add x 2', 'set x 3', 'add y 1']
+same order  -> {'x': 3, 'y': 8} on all 5: True
+  server 0 shuffled -> {'y': 8, 'x': 7}
+  server 1 shuffled -> {'x': 5, 'y': 8}
+  server 2 shuffled -> {'y': 8, 'x': 5}
+  server 3 shuffled -> {'y': 7, 'x': 5}
+  server 4 shuffled -> {'y': 7, 'x': 5}
+own order   -> 3 different answers on 5 servers
+## step2_majority
+size  majority  can lose
+   1         1         0
+   2         2         0
+   3         2         1
+   4         3         1
+   5         3         2
+   6         4         2
+   7         4         3
+5 servers: 10 groups of 3, 45 pairs of groups, smallest overlap 1
+groups of 2: 15 of 45 pairs share nobody
+## step3_election
+  183 ms  server 2  candidate term 1
+  189 ms  server 0  vote      term 1  -> server 2
+  191 ms  server 3  vote      term 1  -> server 2
+  195 ms  server 1  vote      term 1  -> server 2
+  195 ms  server 4  vote      term 1  -> server 2
+  201 ms  server 2  leader    term 1  with 3 of 5 votes
+ 1201 ms  kill server 2 (4 alive)  ->  server 0 leads term 2 after 181 ms
+ 2382 ms  kill server 0 (3 alive)  ->  server 1 leads term 4 after 421 ms
+ 3803 ms  kill server 1 (2 alive)  ->  no leader after 5000 ms, term climbed to 28
+ 8803 ms  restart server 0 (3 alive)  ->  server 3 leads term 29 after 78 ms
+## step4_split_vote
+seed 2: a split vote at boot
+  164 ms  server 0  candidate term 1
+  171 ms  server 2  candidate term 1
+  173 ms  server 1  candidate term 1
+  175 ms  server 4  vote      term 1  -> server 0
+  176 ms  server 3  vote      term 1  -> server 2
+  392 ms  server 0  candidate term 2
+  404 ms  server 1  candidate term 2
+  404 ms  server 2  vote      term 2  -> server 0
+  404 ms  server 4  vote      term 2  -> server 0
+  405 ms  server 3  vote      term 2  -> server 0
+  418 ms  server 0  leader    term 2  with 3 of 5 votes
+wait range      median    worst   stuck over 10 s
+150-150 ms    10000 ms  10000 ms    922 of 1000
+150-155 ms     1847 ms  10000 ms     21 of 1000
+150-175 ms      305 ms   1727 ms      0 of 1000
+150-200 ms      174 ms    942 ms      0 of 1000
+150-300 ms      184 ms    652 ms      0 of 1000
+## step5_replication
+server 2 leads term 1 at 201 ms
+  'set x 1' -> index 1, committed after 21 ms
+  'add x 4' -> index 2, committed after 19 ms
+  'set y 7' -> index 3, committed after 23 ms
+501 ms: three writes
+  server 0 follower  commit 3  [1:set x 1] [1:add x 4] [1:set y 7]
+  server 1 follower  commit 3  [1:set x 1] [1:add x 4] [1:set y 7]
+  server 2 leader    commit 3  [1:set x 1] [1:add x 4] [1:set y 7]
+  server 3 follower  commit 3  [1:set x 1] [1:add x 4] [1:set y 7]
+  server 4 follower  commit 3  [1:set x 1] [1:add x 4] [1:set y 7]
+701 ms: server 3 was dead for two writes
+  server 0 follower  commit 5  [1:set x 1] [1:add x 4] [1:set y 7] [1:add x 2] [1:set x 3]
+  server 1 follower  commit 5  [1:set x 1] [1:add x 4] [1:set y 7] [1:add x 2] [1:set x 3]
+  server 2 leader    commit 5  [1:set x 1] [1:add x 4] [1:set y 7] [1:add x 2] [1:set x 3]
+  server 3 dead      commit 3  [1:set x 1] [1:add x 4] [1:set y 7]
+  server 4 follower  commit 5  [1:set x 1] [1:add x 4] [1:set y 7] [1:add x 2] [1:set x 3]
+714 ms: server 3 caught up in 13 ms
+  server 0 follower  commit 5  [1:set x 1] [1:add x 4] [1:set y 7] [1:add x 2] [1:set x 3]
+  server 1 follower  commit 5  [1:set x 1] [1:add x 4] [1:set y 7] [1:add x 2] [1:set x 3]
+  server 2 leader    commit 5  [1:set x 1] [1:add x 4] [1:set y 7] [1:add x 2] [1:set x 3]
+  server 3 follower  commit 5  [1:set x 1] [1:add x 4] [1:set y 7] [1:add x 2] [1:set x 3]
+  server 4 follower  commit 5  [1:set x 1] [1:add x 4] [1:set y 7] [1:add x 2] [1:set x 3]
+stores: [{'x': 3, 'y': 7}, {'x': 3, 'y': 7}, {'x': 3, 'y': 7}, {'x': 3, 'y': 7}, {'x': 3, 'y': 7}]
+## step6_safety
+872 ms: split [2, 3] | [0, 1, 4]
+  server 0 leader    commit 5  [1:set x 1] [1:set y 2] [2:set x 5] [2:set z 6] [2:add x 1]
+  server 1 follower  commit 5  [1:set x 1] [1:set y 2] [2:set x 5] [2:set z 6] [2:add x 1]
+  server 2 leader    commit 2  [1:set x 1] [1:set y 2] [1:set x 100] [1:set y 200]
+  server 3 follower  commit 2  [1:set x 1] [1:set y 2] [1:set x 100] [1:set y 200]
+  server 4 follower  commit 5  [1:set x 1] [1:set y 2] [2:set x 5] [2:set z 6] [2:add x 1]
+933 ms: healed 61 ms ago
+  server 0 leader    commit 5  [1:set x 1] [1:set y 2] [2:set x 5] [2:set z 6] [2:add x 1]
+  server 1 follower  commit 5  [1:set x 1] [1:set y 2] [2:set x 5] [2:set z 6] [2:add x 1]
+  server 2 follower  commit 5  [1:set x 1] [1:set y 2] [2:set x 5] [2:set z 6] [2:add x 1]
+  server 3 follower  commit 5  [1:set x 1] [1:set y 2] [2:set x 5] [2:set z 6] [2:add x 1]
+  server 4 follower  commit 5  [1:set x 1] [1:set y 2] [2:set x 5] [2:set z 6] [2:add x 1]
+without the vote rule: empty server 3 asks to lead -> server 3 leads term 2
+  BROKEN: index 1: server 3 applied 'set w 9' but 'set x 1' was already applied there
+with the vote rule: empty server 3 asks to lead -> server 1 leads term 3
+  every committed entry kept:
+  server 0 follower  commit 4  [1:set x 1] [1:set y 2] [1:set z 3] [3:set w 9]
+  server 1 leader    commit 4  [1:set x 1] [1:set y 2] [1:set z 3] [3:set w 9]
+  server 2 dead      commit 3  [1:set x 1] [1:set y 2] [1:set z 3]
+  server 3 follower  commit 4  [1:set x 1] [1:set y 2] [1:set z 3] [3:set w 9]
+  server 4 follower  commit 4  [1:set x 1] [1:set y 2] [1:set z 3] [3:set w 9]
+## step7_chaos
+full Raft: 1000 runs of 20 s
+  35856 kills, 34866 restarts, 36235 network splits, 23046 elections
+  441994 writes sent, 413365 committed
+  runs with a broken promise: 0
+without the vote rule: 200 runs of 20 s
+  1058 kills, 929 restarts, 1033 network splits, 841 elections
+  12878 writes sent, 11194 committed
+  runs with a broken promise: 200
+    seed 0: 5920 ms: index 123: server 1 applied 'set k1 162' but 'set k2 135' was already applied there
+    seed 1: 3896 ms: index 71: server 1 applied 'set k0 100' but 'set k0 89' was already applied there
+without the commit rule: 1000 runs of 20 s
+  35856 kills, 34866 restarts, 36235 network splits, 23046 elections
+  441994 writes sent, 413365 committed
+  runs with a broken promise: 0
+## solutions/sizes
+servers  majority  leaders killed before it stopped
+      3         2     1 survived, kill 2 left 1 alive: no leader
+      5         3     2 survived, kill 3 left 2 alive: no leader
+      7         4     3 survived, kill 4 left 3 alive: no leader
+## tests
+all tests passed

@@ -1,0 +1,8 @@
+  154 ms  server 1 leader, term 1
+  476 ms  3 writes; log lengths [3, 3, 3, 3, 3]
+  476 ms  kill server 1
+  714 ms  server 2 leader, term 2
+  720 ms  no leader for 244 ms
+ 1444 ms  server 1 is back; log lengths [5, 5, 5, 5, 5]
+stores: [{'x': 3, 'y': 7}, {'x': 3, 'y': 7}, {'x': 3, 'y': 7}, {'x': 3, 'y': 7}, {'x': 3, 'y': 7}]
+all five agree: True
